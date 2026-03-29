@@ -28,15 +28,30 @@ function Toast() {
   const [msg, setMsg] = useState(null);
   _setToast = (m) => { setMsg(m); setTimeout(() => setMsg(null), 3000); };
   if (!msg) return null;
+
   return (
     <div style={{
-      position: "fixed", bottom: 32, left: "50%", transform: "translateX(-50%)",
-      background: "#1a1a1a", color: "#e8e8e8", padding: "12px 24px",
-      borderRadius: 10, fontSize: 15, zIndex: 9999,
-      border: "0.5px solid #2a2a2a", letterSpacing: "0.01em",
-    }}>{msg}</div>
+      position: "fixed",
+      bottom: 60, // slightly higher
+      left: "50%",
+      transform: "translateX(-50%)",
+      background: "#120505",
+      color: "#ff4d4d",
+      padding: "18px 36px", // increased
+      borderRadius: 16, // smoother
+      fontSize: 17, // bigger text
+      zIndex: 9999,
+      border: "1px solid #e74c3c",
+      letterSpacing: "0.02em",
+      fontWeight: "600",
+      boxShadow: "0 0 25px rgba(231, 76, 60, 0.45), 0 0 50px rgba(231, 76, 60, 0.15)",
+      transition: "all 0.3s ease"
+    }}>
+      {msg}
+    </div>
   );
 }
+
 const toast = (m) => _setToast && _setToast(m);
 
 // confirm dialog
@@ -159,22 +174,22 @@ function PostCard({ post, showDelete = false, onDelete, liked = false, onLike, o
     if (animating) return;
     setAnimating(true);
     setTimeout(() => setAnimating(false), 350);
-    
+
     if (liked) {
       try {
         await apiFetch(`/vote/${post.id}`, { method: "DELETE" });
         setLikeCount(c => Math.max(0, c - 1));
         onUnlike?.(post.id);
-      } catch (e) { 
+      } catch (e) {
         // SELF-HEALING UI: If backend says the vote doesn't exist,
         // it means we are out of sync. Force the UI to un-like it!
         if (e.message.toLowerCase().includes("not found")) {
           setLikeCount(c => Math.max(0, c - 1));
           onUnlike?.(post.id);
         } else {
-          toast(e.message); 
+          toast(e.message);
         }
-        setAnimating(false); 
+        setAnimating(false);
       }
     } else {
       try {
@@ -298,11 +313,11 @@ function Feed({ currentUserId }) {
       // If it's already a number, it just uses the number.
       const mappedIds = data.map(item => typeof item === 'object' ? (item.post_id || item.id) : item);
       const s = new Set(mappedIds.map(Number));
-      
-      setLikedIds(s); 
+
+      setLikedIds(s);
       saveLiked(s);
-    } catch { 
-      setLikedIds(getLikedSet()); 
+    } catch {
+      setLikedIds(getLikedSet());
     }
   }, []);
 
@@ -452,50 +467,99 @@ function Shell({ onLogout }) {
   const [confirmLogout, setConfirmLogout] = useState(false);
   const uid = getUserId();
 
-  const nav = [{ id: "feed", label: "Feed" }, { id: "profile", label: "Profile" }];
+  const nav = [
+    { id: "feed", label: "Feed" },
+    { id: "profile", label: "Profile" }
+  ];
 
   return (
-    <div style={{ minHeight: "100vh", background: "#080808", color: "#e8e8e8" }}>
+    /* The outer div now uses width: 100% and no max-width/border 
+       to ensure the background and navbar span the full screen.
+    */
+    <div style={{ 
+      minHeight: "100vh", 
+      width: "100%", 
+      background: "#080808", 
+      color: "#e8e8e8",
+      margin: 0,
+      padding: 0
+    }}>
       {confirmLogout && (
         <ConfirmDialog
           message="Sign out?"
-          onConfirm={() => { setConfirmLogout(false); toast("Signed out"); setTimeout(onLogout, 800); }}
+          onConfirm={() => { 
+            setConfirmLogout(false); 
+            toast("Signed out"); 
+            setTimeout(onLogout, 800); 
+          }}
           onCancel={() => setConfirmLogout(false)}
         />
       )}
+
+      {/* NAVBAR: Increased height and padding */}
       <div style={{
-        borderBottom: "0.5px solid #1a1a1a", display: "flex", alignItems: "center",
-        padding: "0 24px", height: 64, /* Bumped height from 56 to 64 */
-        position: "sticky", top: 0, background: "#080808", zIndex: 100,
+        borderBottom: "1px solid #1a1a1a", 
+        display: "flex", 
+        alignItems: "center",
+        padding: "0 40px",      // Increased horizontal padding
+        height: 80,             // Increased height from 64 to 80
+        position: "sticky", 
+        top: 0, 
+        background: "#080808", 
+        zIndex: 100,
+        width: "100%",
+        boxSizing: "border-box"
       }}>
-        <span style={{ 
-          fontFamily: "'Georgia', serif", 
-          fontSize: 28, /* Increased from 24 */
-          fontWeight: 400, color: "#e8e8e8", letterSpacing: "-0.02em", marginRight: "auto" 
+        {/* LOGO: Increased font size */}
+        <span style={{
+          fontFamily: "'Georgia', serif",
+          fontSize: 36,         // Increased from 32
+          fontWeight: 400, 
+          color: "#e8e8e8", 
+          letterSpacing: "-0.02em", 
+          marginRight: "auto"
         }}>
           Autocrat
         </span>
+
+        {/* NAV ITEMS: Larger text and more spacing */}
         {nav.map(n => (
           <button key={n.id} onClick={() => setTab(n.id)} style={{
-            background: "none", border: "none", cursor: "pointer",
-            color: tab === n.id ? "#e8e8e8" : "#444",
-            fontSize: 17, /* Increased from 15 */
-            padding: "0 18px", height: "100%",
-            borderBottom: tab === n.id ? "2px solid #e8e8e8" : "2px solid transparent", /* Made active underline slightly thicker */
+            background: "none", 
+            border: "none", 
+            cursor: "pointer",
+            color: tab === n.id ? "#e8e8e8" : "#555",
+            fontSize: 20,       // Increased from 17
+            padding: "0 28px",  // Increased from 18
+            height: "100%",
+            transition: "all 0.2s ease",
+            borderBottom: tab === n.id ? "3px solid #e8e8e8" : "3px solid transparent", // Thicker active line
             letterSpacing: "0.02em",
-          }}>{n.label}</button>
+          }}>
+            {n.label}
+          </button>
         ))}
+
+        {/* SIGN OUT BUTTON: Scaled up to match navbar */}
         <button onClick={() => setConfirmLogout(true)} style={{
-          background: "rgba(231, 76, 60, 0.05)", border: "1px solid rgba(231, 76, 60, 0.4)", borderRadius: 6,
-          color: "#e74c3c", 
-          fontSize: 15, /* Increased from 14 */
-          fontWeight: 500, 
-          padding: "8px 18px", /* Slightly padded out to match larger text */
-          cursor: "pointer", marginLeft: 16,
-          boxShadow: "0 0 10px rgba(231, 76, 60, 0.15)", textShadow: "0 0 8px rgba(231, 76, 60, 0.4)"
-        }}>Sign out</button>
+          background: "rgba(231, 76, 60, 0.05)", 
+          border: "1px solid rgba(231, 76, 60, 0.4)", 
+          borderRadius: 8,
+          color: "#e74c3c",
+          fontSize: 17,         // Increased from 15
+          fontWeight: 600,
+          padding: "12px 24px", // Increased padding
+          cursor: "pointer", 
+          marginLeft: 24,
+          boxShadow: "0 0 15px rgba(231, 76, 60, 0.1)", 
+          textShadow: "0 0 8px rgba(231, 76, 60, 0.4)"
+        }}>
+          Sign out
+        </button>
       </div>
-      <div style={{ maxWidth: 640, margin: "0 auto", padding: "32px 24px" }}>
+
+      {/* MAIN CONTENT AREA */}
+      <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 24px" }}>
         {tab === "feed" && <Feed currentUserId={uid} />}
         {tab === "profile" && <Profile userId={uid} />}
       </div>
@@ -507,14 +571,14 @@ function Shell({ onLogout }) {
 // ROOT
 export default function App() {
   const [authed, setAuthed] = useState(!!getToken());
-  
-  function logout() { 
-    clearToken(); 
-    localStorage.removeItem("autocrat_uid"); 
+
+  function logout() {
+    clearToken();
+    localStorage.removeItem("autocrat_uid");
     localStorage.removeItem(LIKED_KEY); // <-- Add this line to clear the stale likes
-    setAuthed(false); 
+    setAuthed(false);
   }
-  
+
   return (
     <>
       <Toast />
