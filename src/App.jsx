@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 
-const API = "http://localhost:8000";
+const API = "https://ritabrata-social-media-app.onrender.com/";
 
 const getToken = () => localStorage.getItem("autocrat_token");
 const setToken = (t) => localStorage.setItem("autocrat_token", t);
