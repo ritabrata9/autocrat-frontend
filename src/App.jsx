@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 
-const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API = import.meta.env.VITE_API_URL || "http://0.0.0.0:8000"|| "http://127.0.0.1:8000";
 
 const getToken = () => localStorage.getItem("autocrat_token");
 const setToken = (t) => localStorage.setItem("autocrat_token", t);
@@ -22,39 +22,27 @@ async function apiFetch(path, opts = {}) {
   return res.json();
 }
 
-// toast
+// ─── TOAST ───────────────────────────────────────────────────────────────────
+
 let _setToast = null;
 function Toast() {
   const [msg, setMsg] = useState(null);
   _setToast = (m) => { setMsg(m); setTimeout(() => setMsg(null), 3000); };
   if (!msg) return null;
-
   return (
     <div style={{
-      position: "fixed",
-      bottom: 60, // slightly higher
-      left: "50%",
-      transform: "translateX(-50%)",
-      background: "#120505",
-      color: "#ff4d4d",
-      padding: "18px 36px", // increased
-      borderRadius: 16, // smoother
-      fontSize: 17, // bigger text
-      zIndex: 9999,
-      border: "1px solid #e74c3c",
-      letterSpacing: "0.02em",
-      fontWeight: "600",
-      boxShadow: "0 0 25px rgba(231, 76, 60, 0.45), 0 0 50px rgba(231, 76, 60, 0.15)",
-      transition: "all 0.3s ease"
-    }}>
-      {msg}
-    </div>
+      position: "fixed", bottom: 60, left: "50%", transform: "translateX(-50%)",
+      background: "#120505", color: "#ff4d4d", padding: "18px 36px", borderRadius: 16,
+      fontSize: 17, zIndex: 9999, border: "1px solid #e74c3c", letterSpacing: "0.02em",
+      fontWeight: "600", boxShadow: "0 0 25px rgba(231,76,60,0.45),0 0 50px rgba(231,76,60,0.15)",
+      transition: "all 0.3s ease",
+    }}>{msg}</div>
   );
 }
-
 const toast = (m) => _setToast && _setToast(m);
 
-// confirm dialog
+// ─── CONFIRM DIALOG ───────────────────────────────────────────────────────────
+
 function ConfirmDialog({ message, onConfirm, onCancel }) {
   return (
     <div style={{
@@ -81,30 +69,184 @@ function ConfirmDialog({ message, onConfirm, onCancel }) {
   );
 }
 
+// ─── SHARED STYLES ────────────────────────────────────────────────────────────
+
 const inputStyle = {
   width: "100%", boxSizing: "border-box",
   background: "#111", border: "0.5px solid #2a2a2a",
   borderRadius: 8, padding: "13px 16px",
-  color: "#e8e8e8", fontSize: 16, outline: "none",
-  fontFamily: "inherit",
+  color: "#e8e8e8", fontSize: 16, outline: "none", fontFamily: "inherit",
 };
 const btnStyle = {
   width: "100%", padding: "13px", borderRadius: 8,
   background: "#e8e8e8", color: "#080808",
-  border: "none", fontSize: 16, fontWeight: 500,
-  cursor: "pointer", marginTop: 4,
+  border: "none", fontSize: 16, fontWeight: 500, cursor: "pointer", marginTop: 4,
 };
+
+// ─── LIKED PERSISTENCE ────────────────────────────────────────────────────────
 
 const LIKED_KEY = "autocrat_liked";
 function getLikedSet() {
   try { return new Set((JSON.parse(localStorage.getItem(LIKED_KEY)) || []).map(Number)); }
   catch { return new Set(); }
 }
-function saveLiked(set) {
-  localStorage.setItem(LIKED_KEY, JSON.stringify([...set]));
+function saveLiked(set) { localStorage.setItem(LIKED_KEY, JSON.stringify([...set])); }
+
+// ─── COMMENT SECTION ─────────────────────────────────────────────────────────
+
+function CommentSection({ postId, currentUserId }) {
+  const [open, setOpen] = useState(false);
+  const [comments, setComments] = useState([]);
+  const [count, setCount] = useState(0);
+  const [loaded, setLoaded] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [text, setText] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+
+  const fetchComments = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await apiFetch(`/comments/${postId}`);
+      setComments(data);
+      setCount(data.length);
+      setLoaded(true);
+    } catch (e) { toast(e.message); }
+    finally { setLoading(false); }
+  }, [postId]);
+
+  function toggle() {
+    if (!open && !loaded) fetchComments();
+    setOpen(o => !o);
+  }
+
+  async function submitComment() {
+    if (!text.trim()) return;
+    setSubmitting(true);
+    try {
+      const comment = await apiFetch(`/comments/${postId}`, {
+        method: "POST",
+        body: JSON.stringify({ content: text.trim() }),
+      });
+      setComments(prev => [...prev, comment]);
+      setCount(c => c + 1);
+      setText("");
+    } catch (e) { toast(e.message); }
+    finally { setSubmitting(false); }
+  }
+
+  async function doDelete(commentId) {
+    setConfirmDeleteId(null);
+    try {
+      await apiFetch(`/comments/${commentId}`, { method: "DELETE" });
+      setComments(prev => prev.filter(c => c.id !== commentId));
+      setCount(c => Math.max(0, c - 1));
+      toast("Comment deleted");
+    } catch (e) { toast(e.message); }
+  }
+
+  const uid = parseInt(currentUserId);
+
+  return (
+    <div style={{ marginTop: 12 }}>
+      {confirmDeleteId !== null && (
+        <ConfirmDialog
+          message="Delete this comment?"
+          onConfirm={() => doDelete(confirmDeleteId)}
+          onCancel={() => setConfirmDeleteId(null)}
+        />
+      )}
+
+      {/* Toggle button */}
+      <button onClick={toggle} style={{
+        background: "none", border: "none", cursor: "pointer",
+        display: "flex", alignItems: "center", gap: 6, padding: 0,
+      }}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+          stroke={open ? "#aaa" : "#555"} strokeWidth="2"
+          strokeLinecap="round" strokeLinejoin="round"
+          style={{ transition: "stroke 0.15s" }}>
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+        </svg>
+        <span style={{ fontSize: 14, color: open ? "#aaa" : "#555", transition: "color 0.15s" }}>
+          {loaded ? `${count} ${count === 1 ? "comment" : "comments"}` : "Comments"}
+        </span>
+      </button>
+
+      {/* Expanded panel */}
+      {open && (
+        <div style={{ marginTop: 14, paddingTop: 14, borderTop: "0.5px solid #1e1e1e" }}>
+
+          {/* Comment list */}
+          {loading ? (
+            <div style={{ color: "#333", fontSize: 14, paddingBottom: 12 }}>Loading…</div>
+          ) : comments.length === 0 ? (
+            <div style={{ color: "#333", fontSize: 14, paddingBottom: 12 }}>No comments yet. Be the first!</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
+              {comments.map(c => (
+                <div key={c.id} style={{
+                  background: "#0a0a0a", border: "0.5px solid #1e1e1e",
+                  borderRadius: 8, padding: "10px 14px",
+                  display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10,
+                }}>
+                  <div style={{ fontSize: 14, color: "#bbb", lineHeight: 1.55, flex: 1 }}>
+                    {c.content}
+                    {c.created_at && (
+                      <span style={{ fontSize: 12, color: "#444", marginLeft: 10 }}>
+                        {new Date(c.created_at).toLocaleDateString()}
+                      </span>
+                    )}
+                  </div>
+                  {uid === c.user_id && (
+                    <button
+                      onClick={() => setConfirmDeleteId(c.id)}
+                      title="Delete comment"
+                      style={{
+                        background: "none", border: "none", cursor: "pointer",
+                        color: "#3a3a3a", fontSize: 14, padding: 0, lineHeight: 1,
+                        flexShrink: 0, transition: "color 0.15s",
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.color = "#e74c3c"}
+                      onMouseLeave={e => e.currentTarget.style.color = "#3a3a3a"}
+                    >✕</button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* New comment input */}
+          <div style={{ display: "flex", gap: 8 }}>
+            <input
+              placeholder="Write a comment…"
+              value={text}
+              onChange={e => setText(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submitComment(); } }}
+              style={{ ...inputStyle, fontSize: 14, padding: "10px 14px" }}
+            />
+            <button
+              onClick={submitComment}
+              disabled={submitting || !text.trim()}
+              style={{
+                flexShrink: 0, padding: "10px 20px", borderRadius: 8,
+                background: text.trim() ? "#e8e8e8" : "#161616",
+                border: "0.5px solid #2a2a2a",
+                color: text.trim() ? "#080808" : "#444",
+                fontSize: 14, fontWeight: 500,
+                cursor: text.trim() ? "pointer" : "default",
+                transition: "all 0.15s",
+              }}
+            >{submitting ? "…" : "Post"}</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
-// AUTH SCREEN
+// ─── AUTH SCREEN ──────────────────────────────────────────────────────────────
+
 function AuthScreen({ onAuth }) {
   const [mode, setMode] = useState("login");
   const [email, setEmail] = useState("");
@@ -161,8 +303,9 @@ function AuthScreen({ onAuth }) {
   );
 }
 
-// POST CARD
-function PostCard({ post, showDelete = false, onDelete, liked = false, onLike, onUnlike }) {
+// ─── POST CARD ────────────────────────────────────────────────────────────────
+
+function PostCard({ post, showDelete = false, onDelete, liked = false, onLike, onUnlike, currentUserId }) {
   const [likeCount, setLikeCount] = useState(post.like_count ?? 0);
   const [animating, setAnimating] = useState(false);
   const [confirm, setConfirm] = useState(false);
@@ -174,15 +317,12 @@ function PostCard({ post, showDelete = false, onDelete, liked = false, onLike, o
     if (animating) return;
     setAnimating(true);
     setTimeout(() => setAnimating(false), 350);
-
     if (liked) {
       try {
         await apiFetch(`/vote/${post.id}`, { method: "DELETE" });
         setLikeCount(c => Math.max(0, c - 1));
         onUnlike?.(post.id);
       } catch (e) {
-        // SELF-HEALING UI: If backend says the vote doesn't exist,
-        // it means we are out of sync. Force the UI to un-like it!
         if (e.message.toLowerCase().includes("not found")) {
           setLikeCount(c => Math.max(0, c - 1));
           onUnlike?.(post.id);
@@ -213,7 +353,7 @@ function PostCard({ post, showDelete = false, onDelete, liked = false, onLike, o
     <>
       {confirm && <ConfirmDialog message="Delete this post?" onConfirm={confirmDelete} onCancel={() => setConfirm(false)} />}
       <div style={{ background: "#0f0f0f", border: "0.5px solid #1e1e1e", borderRadius: 12, padding: "20px 22px", marginBottom: 14 }}>
-        {post.author_email && (
+        {post.user?.email && (
           <div style={{ fontSize: 13, color: "#555", marginBottom: 8 }}>{post.author_email}</div>
         )}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -225,35 +365,41 @@ function PostCard({ post, showDelete = false, onDelete, liked = false, onLike, o
           </div>
           {showDelete && (
             <button onClick={() => setConfirm(true)} disabled={deleting} style={{
-              background: "rgba(231, 76, 60, 0.05)", border: "1px solid rgba(231, 76, 60, 0.4)", borderRadius: 6,
+              background: "rgba(231,76,60,0.05)", border: "1px solid rgba(231,76,60,0.4)", borderRadius: 6,
               color: "#e74c3c", cursor: "pointer", fontSize: 13, fontWeight: 500, padding: "6px 12px", marginLeft: 12, flexShrink: 0,
-              boxShadow: "0 0 10px rgba(231, 76, 60, 0.15)", textShadow: "0 0 8px rgba(231, 76, 60, 0.4)"
+              boxShadow: "0 0 10px rgba(231,76,60,0.15)", textShadow: "0 0 8px rgba(231,76,60,0.4)",
             }}>
               {deleting ? "..." : "Delete"}
             </button>
           )}
         </div>
+
+        {/* Like row */}
         <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 14 }}>
           <button onClick={toggleLike} style={{ background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: 0 }}>
             <svg width="20" height="20" viewBox="0 0 24 24"
               fill={liked ? "#e74c3c" : "none"}
               stroke={liked ? "#e74c3c" : "#555"}
               strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-              style={{ transform: animating ? "scale(1.35)" : "scale(1)", transition: "transform 0.2s cubic-bezier(0.34,1.56,0.64,1), fill 0.15s ease" }}>
+              style={{ transform: animating ? "scale(1.35)" : "scale(1)", transition: "transform 0.2s cubic-bezier(0.34,1.56,0.64,1),fill 0.15s ease" }}>
               <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
             </svg>
-            <span style={{ fontSize: 15, color: liked ? "#e74c3c" : "#555", transition: "color 0.15s ease", minWidth: 16 }}>{likeCount}</span>
+            <span style={{ fontSize: 15, color: liked ? "#e74c3c" : "#555", transition: "color 0.15s", minWidth: 16 }}>{likeCount}</span>
           </button>
-          <span style={{ fontSize: 13, color: "#333", marginLeft: "auto" }}>
+          <span style={{ fontSize: 13, color: "#555", marginLeft: "auto" }}>
             {post.created_at ? new Date(post.created_at).toLocaleDateString() : ""}
           </span>
         </div>
+
+        {/* Comments */}
+        <CommentSection postId={post.id} currentUserId={currentUserId} />
       </div>
     </>
   );
 }
 
-// NEW POST FORM
+// ─── NEW POST FORM ────────────────────────────────────────────────────────────
+
 function NewPostForm({ onCreated }) {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
@@ -274,9 +420,9 @@ function NewPostForm({ onCreated }) {
   if (!open) return (
     <button onClick={() => setOpen(true)} style={{
       width: "100%", padding: "15px", borderRadius: 12,
-      background: "rgba(46, 204, 113, 0.05)", border: "1px dashed rgba(46, 204, 113, 0.4)",
+      background: "rgba(46,204,113,0.05)", border: "1px dashed rgba(46,204,113,0.4)",
       color: "#2ecc71", fontSize: 15, fontWeight: 500, cursor: "pointer", marginBottom: 20,
-      boxShadow: "0 0 12px rgba(46, 204, 113, 0.15)", textShadow: "0 0 8px rgba(46, 204, 113, 0.4)"
+      boxShadow: "0 0 12px rgba(46,204,113,0.15)", textShadow: "0 0 8px rgba(46,204,113,0.4)",
     }}>+ New post</button>
   );
 
@@ -298,51 +444,47 @@ function NewPostForm({ onCreated }) {
   );
 }
 
-// FEED
+// ─── FEED ─────────────────────────────────────────────────────────────────────
+
 function Feed({ currentUserId }) {
   const [posts, setPosts] = useState([]);
   const [likedIds, setLikedIds] = useState(() => getLikedSet());
-  const [userCache, setUserCache] = useState({});
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
 
   const fetchLikedIds = useCallback(async () => {
     try {
       const data = await apiFetch("/vote/me");
-      // This checks if the item is an object like {post_id: 12} and extracts the ID.
-      // If it's already a number, it just uses the number.
-      const mappedIds = data.map(item => typeof item === 'object' ? (item.post_id || item.id) : item);
+      const mappedIds = data.map(item => typeof item === "object" ? (item.post_id || item.id) : item);
       const s = new Set(mappedIds.map(Number));
-
-      setLikedIds(s);
-      saveLiked(s);
-    } catch {
-      setLikedIds(getLikedSet());
-    }
+      setLikedIds(s); saveLiked(s);
+    } catch { setLikedIds(getLikedSet()); }
   }, []);
 
-  const fetchUserEmail = useCallback(async (userId, cache) => {
-    if (cache[userId]) return;
-    try {
-      const u = await apiFetch(`/users/${userId}`);
-      setUserCache(prev => ({ ...prev, [userId]: u.email }));
-    } catch { /* ignore */ }
-  }, []);
+  // const fetchUserEmail = useCallback(async (userId, cache) => {
+  //   if (cache[userId]) return;
+  //   try {
+  //     const u = await apiFetch(`/users/${userId}`);
+  //     setUserCache(prev => ({ ...prev, [userId]: u.email }));
+  //   } catch { /* ignore */ }
+  // }, []);
 
   const fetchPosts = useCallback(async (q = "") => {
     setLoading(true);
     try {
       const data = await apiFetch(`/posts/?limit=30&search=${encodeURIComponent(q)}`);
-      const sorted = [...data].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  
+      const sorted = [...data].sort(
+        (a, b) => new Date(b.created_at) - new Date(a.created_at)
+      );
+  
       setPosts(sorted);
-      const uniqueIds = [...new Set(sorted.map(p => p.user_id))];
-      setUserCache(prev => {
-        uniqueIds.forEach(id => { if (!prev[id]) fetchUserEmail(id, prev); });
-        return prev;
-      });
-    } catch (e) { toast(e.message); }
-    finally { setLoading(false); }
-  }, [fetchUserEmail]);
+    } catch (e) {
+      toast(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => { fetchPosts(); fetchLikedIds(); }, [fetchPosts, fetchLikedIds]);
 
@@ -363,15 +505,16 @@ function Feed({ currentUserId }) {
       <input placeholder="Search posts..." value={search} onChange={e => setSearch(e.target.value)} style={{ ...inputStyle, marginBottom: 20 }} />
       <NewPostForm onCreated={p => setPosts(prev => [{ like_count: 0, ...p }, ...prev])} />
       {loading ? (
-        <div style={{ color: "#333", fontSize: 15, textAlign: "center", padding: 40 }}>Loading...</div>
+        <div style={{ color: "#555", fontSize: 15, textAlign: "center", padding: 40 }}>Loading...</div>
       ) : posts.length === 0 ? (
-        <div style={{ color: "#333", fontSize: 15, textAlign: "center", padding: 40 }}>No posts yet</div>
+        <div style={{ color: "#555", fontSize: 15, textAlign: "center", padding: 40 }}>No posts yet</div>
       ) : posts.map(p => (
         <PostCard
           key={p.id}
-          post={{ ...p, author_email: userCache[p.user_id] }}
+          post={p}
           showDelete={false}
           liked={likedIds.has(p.id)}
+          currentUserId={currentUserId}
           onDelete={id => setPosts(prev => prev.filter(x => x.id !== id))}
           onLike={handleLike}
           onUnlike={handleUnlike}
@@ -381,7 +524,8 @@ function Feed({ currentUserId }) {
   );
 }
 
-// PROFILE
+// ─── PROFILE ──────────────────────────────────────────────────────────────────
+
 function Profile({ userId }) {
   const [user, setUser] = useState(null);
   const [posts, setPosts] = useState([]);
@@ -398,7 +542,6 @@ function Profile({ userId }) {
       setPosts(mine);
     }).catch(e => toast(e.message))
       .finally(() => setLoadingPosts(false));
-    // fetch server-authoritative liked set
     apiFetch("/vote/me").then(ids => {
       const s = new Set(ids.map(Number));
       setLikedIds(s); saveLiked(s);
@@ -443,15 +586,16 @@ function Profile({ userId }) {
 
       <div style={{ fontSize: 13, color: "#444", marginBottom: 14, letterSpacing: "0.08em" }}>YOUR POSTS</div>
       {loadingPosts ? (
-        <div style={{ color: "#333", fontSize: 15, textAlign: "center", padding: 40 }}>Loading...</div>
+        <div style={{ color: "#555", fontSize: 15, textAlign: "center", padding: 40 }}>Loading...</div>
       ) : posts.length === 0 ? (
-        <div style={{ color: "#333", fontSize: 15, textAlign: "center", padding: 40 }}>No posts yet</div>
+        <div style={{ color: "#555", fontSize: 15, textAlign: "center", padding: 40 }}>No posts yet</div>
       ) : posts.map(p => (
         <PostCard
           key={p.id}
           post={p}
           showDelete={true}
           liked={likedIds.has(p.id)}
+          currentUserId={userId}
           onDelete={id => setPosts(prev => prev.filter(x => x.id !== id))}
           onLike={handleLike}
           onUnlike={handleUnlike}
@@ -461,7 +605,8 @@ function Profile({ userId }) {
   );
 }
 
-// SHELL
+// ─── SHELL ────────────────────────────────────────────────────────────────────
+
 function Shell({ onLogout }) {
   const [tab, setTab] = useState("feed");
   const [confirmLogout, setConfirmLogout] = useState(false);
@@ -469,96 +614,43 @@ function Shell({ onLogout }) {
 
   const nav = [
     { id: "feed", label: "Feed" },
-    { id: "profile", label: "Profile" }
+    { id: "profile", label: "Profile" },
   ];
 
   return (
-    /* The outer div now uses width: 100% and no max-width/border 
-       to ensure the background and navbar span the full screen.
-    */
-    <div style={{ 
-      minHeight: "100vh", 
-      width: "100%", 
-      background: "#080808", 
-      color: "#e8e8e8",
-      margin: 0,
-      padding: 0
-    }}>
+    <div style={{ minHeight: "100vh", width: "100%", background: "#080808", color: "#e8e8e8", margin: 0, padding: 0 }}>
       {confirmLogout && (
         <ConfirmDialog
           message="Sign out?"
-          onConfirm={() => { 
-            setConfirmLogout(false); 
-            toast("Signed out"); 
-            setTimeout(onLogout, 800); 
-          }}
+          onConfirm={() => { setConfirmLogout(false); toast("Signed out"); setTimeout(onLogout, 800); }}
           onCancel={() => setConfirmLogout(false)}
         />
       )}
-
-      {/* NAVBAR: Increased height and padding */}
       <div style={{
-        borderBottom: "1px solid #1a1a1a", 
-        display: "flex", 
-        alignItems: "center",
-        padding: "0 40px",      // Increased horizontal padding
-        height: 80,             // Increased height from 64 to 80
-        position: "sticky", 
-        top: 0, 
-        background: "#080808", 
-        zIndex: 100,
-        width: "100%",
-        boxSizing: "border-box"
+        borderBottom: "1px solid #1a1a1a", display: "flex", alignItems: "center",
+        padding: "0 40px", height: 80, position: "sticky", top: 0,
+        background: "#080808", zIndex: 100, width: "100%", boxSizing: "border-box",
       }}>
-        {/* LOGO: Increased font size */}
-        <span style={{
-          fontFamily: "'Georgia', serif",
-          fontSize: 36,         // Increased from 32
-          fontWeight: 400, 
-          color: "#e8e8e8", 
-          letterSpacing: "-0.02em", 
-          marginRight: "auto"
-        }}>
+        <span style={{ fontFamily: "'Georgia', serif", fontSize: 36, fontWeight: 400, color: "#e8e8e8", letterSpacing: "-0.02em", marginRight: "auto" }}>
           Autocrat
         </span>
-
-        {/* NAV ITEMS: Larger text and more spacing */}
         {nav.map(n => (
           <button key={n.id} onClick={() => setTab(n.id)} style={{
-            background: "none", 
-            border: "none", 
-            cursor: "pointer",
+            background: "none", border: "none", cursor: "pointer",
             color: tab === n.id ? "#e8e8e8" : "#555",
-            fontSize: 20,       // Increased from 17
-            padding: "0 28px",  // Increased from 18
-            height: "100%",
+            fontSize: 20, padding: "0 28px", height: "100%",
             transition: "all 0.2s ease",
-            borderBottom: tab === n.id ? "3px solid #e8e8e8" : "3px solid transparent", // Thicker active line
+            borderBottom: tab === n.id ? "3px solid #e8e8e8" : "3px solid transparent",
             letterSpacing: "0.02em",
-          }}>
-            {n.label}
-          </button>
+          }}>{n.label}</button>
         ))}
-
-        {/* SIGN OUT BUTTON: Scaled up to match navbar */}
         <button onClick={() => setConfirmLogout(true)} style={{
-          background: "rgba(231, 76, 60, 0.05)", 
-          border: "1px solid rgba(231, 76, 60, 0.4)", 
-          borderRadius: 8,
-          color: "#e74c3c",
-          fontSize: 17,         // Increased from 15
-          fontWeight: 600,
-          padding: "12px 24px", // Increased padding
-          cursor: "pointer", 
-          marginLeft: 24,
-          boxShadow: "0 0 15px rgba(231, 76, 60, 0.1)", 
-          textShadow: "0 0 8px rgba(231, 76, 60, 0.4)"
-        }}>
-          Sign out
-        </button>
+          background: "rgba(231,76,60,0.05)", border: "1px solid rgba(231,76,60,0.4)", borderRadius: 8,
+          color: "#e74c3c", fontSize: 17, fontWeight: 600, padding: "12px 24px", cursor: "pointer", marginLeft: 24,
+          boxShadow: "0 0 15px rgba(231,76,60,0.1)", textShadow: "0 0 8px rgba(231,76,60,0.4)",
+        }}>Sign out</button>
       </div>
 
-      {/* MAIN CONTENT AREA */}
       <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 24px" }}>
         {tab === "feed" && <Feed currentUserId={uid} />}
         {tab === "profile" && <Profile userId={uid} />}
@@ -567,15 +659,15 @@ function Shell({ onLogout }) {
   );
 }
 
+// ─── ROOT ─────────────────────────────────────────────────────────────────────
 
-// ROOT
 export default function App() {
   const [authed, setAuthed] = useState(!!getToken());
 
   function logout() {
     clearToken();
     localStorage.removeItem("autocrat_uid");
-    localStorage.removeItem(LIKED_KEY); // <-- Add this line to clear the stale likes
+    localStorage.removeItem(LIKED_KEY);
     setAuthed(false);
   }
 
