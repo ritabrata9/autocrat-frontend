@@ -1,12 +1,15 @@
 import { useState, useEffect, useCallback } from "react";
 
-const API = import.meta.env.VITE_API_URL || "http://0.0.0.0:8000"|| "http://127.0.0.1:8000";
+const API = import.meta.env.VITE_API_URL || "http://0.0.0.0:8000" || "http://127.0.0.1:8000";
 
 const getToken = () => localStorage.getItem("autocrat_token");
 const setToken = (t) => localStorage.setItem("autocrat_token", t);
 const clearToken = () => localStorage.removeItem("autocrat_token");
 const getUserId = () => localStorage.getItem("autocrat_uid");
 const setUserId = (id) => localStorage.setItem("autocrat_uid", id);
+
+const getUserRole = () => localStorage.getItem("autocrat_role");
+const setUserRole = (r) => localStorage.setItem("autocrat_role", r);
 
 function authHeaders() {
   return { Authorization: `Bearer ${getToken()}`, "Content-Type": "application/json" };
@@ -94,7 +97,7 @@ function saveLiked(set) { localStorage.setItem(LIKED_KEY, JSON.stringify([...set
 
 // ─── COMMENT SECTION ─────────────────────────────────────────────────────────
 
-function CommentSection({ postId, currentUserId }) {
+function CommentSection({ postId, currentUserId, currentUserRole }) {
   const [open, setOpen] = useState(false);
   const [comments, setComments] = useState([]);
   const [count, setCount] = useState(0);
@@ -198,7 +201,7 @@ function CommentSection({ postId, currentUserId }) {
                       </span>
                     )}
                   </div>
-                  {uid === c.user_id && (
+                  {(currentUserRole === "ADMIN" || uid === c.user_id )&& (
                     <button
                       onClick={() => setConfirmDeleteId(c.id)}
                       title="Delete comment"
@@ -265,6 +268,7 @@ function AuthScreen({ onAuth }) {
         setToken(data.access_token);
         const payload = JSON.parse(atob(data.access_token.split(".")[1]));
         setUserId(payload.user_id);
+        setUserRole(payload.role ?? "USER");
         onAuth();
       } else {
         await apiFetch("/users/", { method: "POST", body: JSON.stringify({ email, password }) });
@@ -305,7 +309,7 @@ function AuthScreen({ onAuth }) {
 
 // ─── POST CARD ────────────────────────────────────────────────────────────────
 
-function PostCard({ post, showDelete = false, onDelete, liked = false, onLike, onUnlike, currentUserId }) {
+function PostCard({ post, showDelete = false, onDelete, liked = false, onLike, onUnlike, currentUserId, currentUserRole }) {
   const [likeCount, setLikeCount] = useState(post.like_count ?? 0);
   const [animating, setAnimating] = useState(false);
   const [confirm, setConfirm] = useState(false);
@@ -392,7 +396,7 @@ function PostCard({ post, showDelete = false, onDelete, liked = false, onLike, o
         </div>
 
         {/* Comments */}
-        <CommentSection postId={post.id} currentUserId={currentUserId} />
+        <CommentSection postId={post.id} currentUserId={currentUserId} currentUserRole={currentUserRole} />
       </div>
     </>
   );
@@ -446,7 +450,7 @@ function NewPostForm({ onCreated }) {
 
 // ─── FEED ─────────────────────────────────────────────────────────────────────
 
-function Feed({ currentUserId }) {
+function Feed({ currentUserId, currentUserRole }) {
   const [posts, setPosts] = useState([]);
   const [likedIds, setLikedIds] = useState(() => getLikedSet());
   const [search, setSearch] = useState("");
@@ -473,11 +477,11 @@ function Feed({ currentUserId }) {
     setLoading(true);
     try {
       const data = await apiFetch(`/posts/?limit=30&search=${encodeURIComponent(q)}`);
-  
+
       const sorted = [...data].sort(
         (a, b) => new Date(b.created_at) - new Date(a.created_at)
       );
-  
+
       setPosts(sorted);
     } catch (e) {
       toast(e.message);
@@ -512,9 +516,10 @@ function Feed({ currentUserId }) {
         <PostCard
           key={p.id}
           post={p}
-          showDelete={false}
+          showDelete={currentUserRole === "ADMIN" || p.user_id === parseInt(currentUserId)}
           liked={likedIds.has(p.id)}
           currentUserId={currentUserId}
+          currentUserRole={currentUserRole}
           onDelete={id => setPosts(prev => prev.filter(x => x.id !== id))}
           onLike={handleLike}
           onUnlike={handleUnlike}
@@ -526,7 +531,7 @@ function Feed({ currentUserId }) {
 
 // ─── PROFILE ──────────────────────────────────────────────────────────────────
 
-function Profile({ userId }) {
+function Profile({ userId, currentUserRole }) {
   const [user, setUser] = useState(null);
   const [posts, setPosts] = useState([]);
   const [loadingPosts, setLoadingPosts] = useState(true);
@@ -593,9 +598,10 @@ function Profile({ userId }) {
         <PostCard
           key={p.id}
           post={p}
-          showDelete={true}
+          showDelete={currentUserRole === "ADMIN" || p.user_id === parseInt(userId)}
           liked={likedIds.has(p.id)}
           currentUserId={userId}
+          currentUserRole={currentUserRole}
           onDelete={id => setPosts(prev => prev.filter(x => x.id !== id))}
           onLike={handleLike}
           onUnlike={handleUnlike}
@@ -611,6 +617,7 @@ function Shell({ onLogout }) {
   const [tab, setTab] = useState("feed");
   const [confirmLogout, setConfirmLogout] = useState(false);
   const uid = getUserId();
+  const role = getUserRole();
 
   const nav = [
     { id: "feed", label: "Feed" },
@@ -652,8 +659,8 @@ function Shell({ onLogout }) {
       </div>
 
       <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 24px" }}>
-        {tab === "feed" && <Feed currentUserId={uid} />}
-        {tab === "profile" && <Profile userId={uid} />}
+        {tab === "feed" && <Feed currentUserId={uid} currentUserRole={role} />}
+        {tab === "profile" && <Profile userId={uid} currentUserRole={role} />}
       </div>
     </div>
   );
@@ -667,6 +674,7 @@ export default function App() {
   function logout() {
     clearToken();
     localStorage.removeItem("autocrat_uid");
+    localStorage.removeItem("autocrat_role");
     localStorage.removeItem(LIKED_KEY);
     setAuthed(false);
   }
