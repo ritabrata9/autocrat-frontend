@@ -3,7 +3,8 @@ import { apiFetch, getLikedSet, saveLiked } from "../utils/api";
 import { toast } from "../components/Shared";
 import { PostCard, NewPostForm } from "../components/Post";
 
-export function Feed({ currentUserId, currentUserRole }) {
+// Add onNavigateToProfile to the props
+export function Feed({ currentUserId, currentUserRole, onNavigateToProfile }) {
   const [posts, setPosts] = useState([]);
   const [likedIds, setLikedIds] = useState(() => getLikedSet());
   const [search, setSearch] = useState("");
@@ -65,6 +66,7 @@ export function Feed({ currentUserId, currentUserRole }) {
           currentUserRole={currentUserRole}
           onDelete={id => setPosts(prev => prev.filter(x => x.id !== id))}
           onLike={handleLike} onUnlike={handleUnlike}
+          onUserClick={onNavigateToProfile} // Pass the function down here
         />
       ))}
     </div>

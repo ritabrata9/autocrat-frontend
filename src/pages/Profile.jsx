@@ -4,7 +4,7 @@ import { toast } from "../components/Shared";
 import { PostCard } from "../components/Post";
 import { ConfirmDialog } from "../components/Shared";
 
-export function Profile({ userId, currentUserRole }) {
+export function Profile({ userId, currentUserId, currentUserRole }) {
   const [user, setUser] = useState(null);
   const [posts, setPosts] = useState([]);
   const [loadingPosts, setLoadingPosts] = useState(true);
@@ -14,6 +14,10 @@ export function Profile({ userId, currentUserRole }) {
   const [bioInput, setBioInput] = useState("");
   const [savingBio, setSavingBio] = useState(false);
   const [confirmDeleteUser, setConfirmDeleteUser] = useState(false);
+
+  // Permission Checks
+  const isOwner = parseInt(userId) === parseInt(currentUserId);
+  const isAdmin = currentUserRole === "ADMIN";
 
   useEffect(() => {
     if (!userId) return;
@@ -66,9 +70,16 @@ export function Profile({ userId, currentUserRole }) {
   async function deleteAccount() {
     try {
       await apiFetch(`/users/${userId}`, { method: "DELETE" });
-      clearToken();
-      localStorage.clear();
-      window.location.reload();
+
+      if (isOwner) {
+        clearToken();
+        localStorage.clear();
+        window.location.reload();
+      } else {
+        // If an admin deletes someone else, just notify and reload the page
+        toast("Account deleted");
+        setTimeout(() => window.location.reload(), 1500);
+      }
     } catch (e) {
       toast(e.message);
     }
@@ -91,7 +102,7 @@ export function Profile({ userId, currentUserRole }) {
     <div>
       {confirmDeleteUser && (
         <ConfirmDialog
-          message="Delete your account permanently?"
+          message={isOwner ? "Delete your account permanently?" : `Delete ${user.email}'s account?`}
           onConfirm={deleteAccount}
           onCancel={() => setConfirmDeleteUser(false)}
         />
@@ -104,6 +115,12 @@ export function Profile({ userId, currentUserRole }) {
         <div className="profile-info-container">
           <div className="profile-email-row">
             <span className="profile-email">{user.email}</span>
+          </div>
+
+          <div className="profile-meta">
+            {user.created_at
+              ? `Joined ${new Date(user.created_at).toLocaleDateString()}`
+              : `ID #${user.id}`}
           </div>
 
           {/* BIO */}
@@ -128,12 +145,14 @@ export function Profile({ userId, currentUserRole }) {
             ) : (
               <div className="profile-bio-view-row">
                 <span className="profile-bio-text">{bio || "No bio yet"}</span>
-                <button
-                  onClick={() => { setEditingBio(true); setBioInput(bio); }}
-                  className="btn-profile-action"
-                >
-                  Edit Bio
-                </button>
+                {isOwner && (
+                  <button
+                    onClick={() => { setEditingBio(true); setBioInput(bio); }}
+                    className="btn-profile-action"
+                  >
+                    Edit
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -145,15 +164,17 @@ export function Profile({ userId, currentUserRole }) {
         </div>
       </div>
 
-      {/* DELETE BUTTON */}
-      <div className="profile-actions-row">
-        <button onClick={() => setConfirmDeleteUser(true)} className="btn-profile-danger">
-          Delete account
-        </button>
-      </div>
+      {/* DELETE BUTTON - Only visible to Owner or Admin */}
+      {(isOwner || isAdmin) && (
+        <div className="profile-actions-row">
+          <button onClick={() => setConfirmDeleteUser(true)} className="btn-profile-danger">
+            Delete account
+          </button>
+        </div>
+      )}
 
       {/* POSTS */}
-      <div className="profile-section-label">YOUR POSTS</div>
+      <div className="profile-section-label">{isOwner ? "YOUR POSTS" : "POSTS"}</div>
 
       {loadingPosts ? (
         <div className="profile-center">Loading...</div>
@@ -163,9 +184,9 @@ export function Profile({ userId, currentUserRole }) {
         <PostCard
           key={p.id}
           post={p}
-          showDelete={currentUserRole === "ADMIN" || p.user_id === parseInt(userId)}
+          showDelete={isAdmin || p.user_id === parseInt(currentUserId)} // Corrected permission logic
           liked={likedIds.has(p.id)}
-          currentUserId={userId}
+          currentUserId={currentUserId} // Passing the actual logged-in user, not the viewed profile
           currentUserRole={currentUserRole}
           onDelete={id => setPosts(prev => prev.filter(x => x.id !== id))}
           onLike={handleLike}

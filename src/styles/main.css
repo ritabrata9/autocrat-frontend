@@ -590,3 +590,17 @@ body {
 .feed-search-input {
   margin-bottom: 20px;
 }
+
+.post-author-link {
+  font-size: 13px;
+  color: #888;
+  margin-bottom: 8px;
+  cursor: pointer;
+  display: inline-block;
+  transition: color 0.2s ease;
+}
+
+.post-author-link:hover {
+  color: #3498db;
+  text-decoration: underline;
+}

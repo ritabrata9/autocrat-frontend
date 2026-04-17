@@ -9,11 +9,26 @@ export function Shell({ onLogout }) {
   const [confirmLogout, setConfirmLogout] = useState(false);
   const uid = getUserId();
   const role = getUserRole();
+  
+  const [viewUserId, setViewUserId] = useState(uid);
 
   const nav = [
     { id: "feed", label: "Feed" },
     { id: "profile", label: "Profile" },
   ];
+
+  function handleNavClick(targetTab) {
+    if (targetTab === "profile") {
+      setViewUserId(uid);
+    }
+    setTab(targetTab);
+  }
+
+  function navigateToUserProfile(targetUserId) {
+    if (!targetUserId) return;
+    setViewUserId(targetUserId);
+    setTab("profile");
+  }
 
   return (
     <div>
@@ -31,7 +46,7 @@ export function Shell({ onLogout }) {
         {nav.map(n => (
           <button 
             key={n.id} 
-            onClick={() => setTab(n.id)} 
+            onClick={() => handleNavClick(n.id)} 
             className={`shell-nav-btn ${tab === n.id ? "active" : "inactive"}`}
           >
             {n.label}
@@ -44,8 +59,20 @@ export function Shell({ onLogout }) {
       </div>
 
       <div className="shell-content">
-        {tab === "feed" && <Feed currentUserId={uid} currentUserRole={role} />}
-        {tab === "profile" && <Profile userId={uid} currentUserRole={role} />}
+        {tab === "feed" && (
+          <Feed 
+            currentUserId={uid} 
+            currentUserRole={role} 
+            onNavigateToProfile={navigateToUserProfile} 
+          />
+        )}
+        {tab === "profile" && (
+          <Profile 
+            userId={viewUserId} 
+            currentUserId={uid} // <-- NEW: Now the profile knows who is looking at it
+            currentUserRole={role} 
+          />
+        )}
       </div>
     </div>
   );

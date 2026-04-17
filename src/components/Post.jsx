@@ -3,7 +3,7 @@ import { apiFetch } from "../utils/api";
 import { toast, ConfirmDialog } from "./Shared";
 import { CommentSection } from "./Comments";
 
-export function PostCard({ post, showDelete = false, onDelete, liked = false, onLike, onUnlike, currentUserId, currentUserRole }) {
+export function PostCard({ post, showDelete = false, onDelete, liked = false, onLike, onUnlike, currentUserId, currentUserRole, onUserClick }) {
   const [likeCount, setLikeCount] = useState(post.like_count ?? 0);
   const [animating, setAnimating] = useState(false);
   const [confirm, setConfirm] = useState(false);
@@ -47,11 +47,20 @@ export function PostCard({ post, showDelete = false, onDelete, liked = false, on
     } catch (e) { toast(e.message); setDeleting(false); }
   }
 
+  const displayEmail = post.user?.email || post.author_email;
+
   return (
     <>
       {confirm && <ConfirmDialog message="Delete this post?" onConfirm={confirmDelete} onCancel={() => setConfirm(false)} />}
       <div className="post-card">
-        {post.user?.email && <div className="post-author">{post.author_email}</div>}
+        {displayEmail && (
+          <div 
+            className="post-author-link" 
+            onClick={() => onUserClick && onUserClick(post.user_id)}
+          >
+            {displayEmail}
+          </div>
+        )}
         <div className="post-header">
           <div style={{ flex: 1 }}>
             <div className="post-title">{post.title}</div>
@@ -88,6 +97,7 @@ export function PostCard({ post, showDelete = false, onDelete, liked = false, on
   );
 }
 
+// NewPostForm remains exactly the same as your code...
 export function NewPostForm({ onCreated }) {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
@@ -113,31 +123,13 @@ export function NewPostForm({ onCreated }) {
 
   return (
     <div className="new-post-container">
-      <input 
-        placeholder="Title" 
-        value={title} 
-        onChange={e => setTitle(e.target.value)} 
-        className="autocrat-input new-post-title-input" 
-        autoFocus 
-      />
-      <textarea 
-        placeholder="What's on your mind? (optional)" 
-        value={content} 
-        onChange={e => setContent(e.target.value)} 
-        rows={3} 
-        className="autocrat-input new-post-content-input" 
-      />
+      <input placeholder="Title" value={title} onChange={e => setTitle(e.target.value)} className="autocrat-input new-post-title-input" autoFocus />
+      <textarea placeholder="What's on your mind? (optional)" value={content} onChange={e => setContent(e.target.value)} rows={3} className="autocrat-input new-post-content-input" />
       <div className="new-post-actions">
-        <button 
-          onClick={submit} 
-          disabled={loading || !title.trim()} 
-          className="autocrat-btn btn-submit-post"
-        >
+        <button onClick={submit} disabled={loading || !title.trim()} className="autocrat-btn btn-submit-post">
           {loading ? "..." : "Post"}
         </button>
-        <button onClick={() => setOpen(false)} className="btn-cancel-post">
-          Cancel
-        </button>
+        <button onClick={() => setOpen(false)} className="btn-cancel-post">Cancel</button>
       </div>
     </div>
   );
