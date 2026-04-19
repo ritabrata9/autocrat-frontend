@@ -23,24 +23,24 @@ export function Profile({ userId, currentUserId, currentUserRole }) {
     if (!userId) return;
 
     apiFetch(`/users/${userId}`)
-      .then(u => {
+      .then((u) => {
         setUser(u);
         setBio(u.bio ?? "");
       })
-      .catch(e => toast(e.message));
+      .catch((e) => toast(e.message));
 
     apiFetch(`/posts/?limit=100`)
-      .then(data => {
+      .then((data) => {
         const mine = data
-          .filter(p => p.user_id === parseInt(userId))
+          .filter((p) => p.user_id === parseInt(userId))
           .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
         setPosts(mine);
       })
-      .catch(e => toast(e.message))
+      .catch((e) => toast(e.message))
       .finally(() => setLoadingPosts(false));
 
     apiFetch("/vote/me")
-      .then(ids => {
+      .then((ids) => {
         const s = new Set(ids.map(Number));
         setLikedIds(s);
         saveLiked(s);
@@ -85,24 +85,59 @@ export function Profile({ userId, currentUserId, currentUserRole }) {
     }
   }
 
+  async function handleProfilePicUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const res = await apiFetch("/users/profile-pic", {
+        method: "POST",
+        body: formData,
+      });
+
+      setUser((prev) => ({
+        ...prev,
+        profile_picture_url: res.url,
+      }));
+
+      toast("Profile photo updated");
+    } catch (e) {
+      toast(e.message);
+    }
+  }
+
   function handleLike(postId) {
-    setLikedIds(prev => { const s = new Set(prev); s.add(postId); saveLiked(s); return s; });
+    setLikedIds((prev) => {
+      const s = new Set(prev);
+      s.add(postId);
+      saveLiked(s);
+      return s;
+    });
   }
   function handleUnlike(postId) {
-    setLikedIds(prev => { const s = new Set(prev); s.delete(postId); saveLiked(s); return s; });
+    setLikedIds((prev) => {
+      const s = new Set(prev);
+      s.delete(postId);
+      saveLiked(s);
+      return s;
+    });
   }
 
-  if (!user) return (
-    <div className="profile-center">Loading...</div>
-  );
+  if (!user) return <div className="profile-center">Loading...</div>;
 
-  const initials = user.email?.slice(0, 2).toUpperCase() ?? "??";
 
   return (
     <div>
       {confirmDeleteUser && (
         <ConfirmDialog
-          message={isOwner ? "Delete your account permanently?" : `Delete ${user.email}'s account?`}
+          message={
+            isOwner
+              ? "Delete your account permanently?"
+              : `Delete ${user.email}'s account?`
+          }
           onConfirm={deleteAccount}
           onCancel={() => setConfirmDeleteUser(false)}
         />
@@ -110,7 +145,22 @@ export function Profile({ userId, currentUserId, currentUserRole }) {
 
       {/* PROFILE HEADER */}
       <div className="profile-card">
-        <div className="profile-avatar">{initials}</div>
+        <div className="profile-avatar">
+          {user.profile_picture_url ? (
+            <img src={user.profile_picture_url} loading="lazy" alt="profile" />
+          ) : (
+            <span>Add Photo</span>
+          )}
+
+          {isOwner && (
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleProfilePicUpload}
+              className="profile-avatar-input"
+            />
+          )}
+        </div>
 
         <div className="profile-info-container">
           <div className="profile-email-row">
@@ -129,16 +179,23 @@ export function Profile({ userId, currentUserId, currentUserRole }) {
               <div className="profile-bio-edit-row">
                 <input
                   value={bioInput}
-                  onChange={e => setBioInput(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && updateBio()}
+                  onChange={(e) => setBioInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && updateBio()}
                   autoFocus
                   placeholder="Write a short bio..."
                   className="profile-bio-input"
                 />
-                <button onClick={updateBio} disabled={savingBio} className="btn-profile-save">
+                <button
+                  onClick={updateBio}
+                  disabled={savingBio}
+                  className="btn-profile-save"
+                >
                   {savingBio ? "Saving..." : "Save"}
                 </button>
-                <button onClick={() => setEditingBio(false)} className="btn-profile-action">
+                <button
+                  onClick={() => setEditingBio(false)}
+                  className="btn-profile-action"
+                >
                   Cancel
                 </button>
               </div>
@@ -147,7 +204,10 @@ export function Profile({ userId, currentUserId, currentUserRole }) {
                 <span className="profile-bio-text">{bio || "No bio yet"}</span>
                 {isOwner && (
                   <button
-                    onClick={() => { setEditingBio(true); setBioInput(bio); }}
+                    onClick={() => {
+                      setEditingBio(true);
+                      setBioInput(bio);
+                    }}
                     className="btn-profile-action"
                   >
                     Edit
@@ -167,32 +227,41 @@ export function Profile({ userId, currentUserId, currentUserRole }) {
       {/* DELETE BUTTON - Only visible to Owner or Admin */}
       {(isOwner || isAdmin) && (
         <div className="profile-actions-row">
-          <button onClick={() => setConfirmDeleteUser(true)} className="btn-profile-danger">
+          <button
+            onClick={() => setConfirmDeleteUser(true)}
+            className="btn-profile-danger"
+          >
             Delete account
           </button>
         </div>
       )}
 
       {/* POSTS */}
-      <div className="profile-section-label">{isOwner ? "YOUR POSTS" : "POSTS"}</div>
+      <div className="profile-section-label">
+        {isOwner ? "YOUR POSTS" : "POSTS"}
+      </div>
 
       {loadingPosts ? (
         <div className="profile-center">Loading...</div>
       ) : posts.length === 0 ? (
         <div className="profile-center">No posts yet</div>
-      ) : posts.map(p => (
-        <PostCard
-          key={p.id}
-          post={p}
-          showDelete={isAdmin || p.user_id === parseInt(currentUserId)} // Corrected permission logic
-          liked={likedIds.has(p.id)}
-          currentUserId={currentUserId} // Passing the actual logged-in user, not the viewed profile
-          currentUserRole={currentUserRole}
-          onDelete={id => setPosts(prev => prev.filter(x => x.id !== id))}
-          onLike={handleLike}
-          onUnlike={handleUnlike}
-        />
-      ))}
+      ) : (
+        posts.map((p) => (
+          <PostCard
+            key={p.id}
+            post={p}
+            showDelete={isAdmin || p.user_id === parseInt(currentUserId)} // Corrected permission logic
+            liked={likedIds.has(p.id)}
+            currentUserId={currentUserId} // Passing the actual logged-in user, not the viewed profile
+            currentUserRole={currentUserRole}
+            onDelete={(id) =>
+              setPosts((prev) => prev.filter((x) => x.id !== id))
+            }
+            onLike={handleLike}
+            onUnlike={handleUnlike}
+          />
+        ))
+      )}
     </div>
   );
 }

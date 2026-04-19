@@ -14,14 +14,25 @@ export function authHeaders() {
 }
 
 export async function apiFetch(path, opts = {}) {
-  const { headers: extraHeaders, ...restOpts } = opts;
+  const { headers: extraHeaders = {}, body, ...restOpts } = opts;
+
+  const isFormData = body instanceof FormData;
+
+  const headers = {
+    ...authHeaders(),
+    ...extraHeaders,
+  };
+
+  if (isFormData) {
+    delete headers["Content-Type"];
+  } else {
+    headers["Content-Type"] = "application/json";
+  }
 
   const res = await fetch(`${API}${path}`, {
     ...restOpts,
-    headers: {
-      ...authHeaders(),
-      ...extraHeaders,
-    },
+    body,
+    headers,
   });
 
   if (!res.ok) {

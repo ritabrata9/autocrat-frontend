@@ -117,7 +117,7 @@ export function NewPostForm({ onCreated }) {
 
   if (!open) return (
     <button onClick={() => setOpen(true)} className="btn-new-post-trigger">
-      + New post
+      + New post 
     </button>
   );
 
