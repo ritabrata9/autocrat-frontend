@@ -32,7 +32,7 @@ export default function App() {
       }
 
       attempts++;
-      if (attempts > 15) {
+      if (attempts > 30) {
         setError(true);
         clearInterval(interval);
       }
