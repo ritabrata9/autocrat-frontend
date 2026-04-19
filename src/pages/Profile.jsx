@@ -14,6 +14,7 @@ export function Profile({ userId, currentUserId, currentUserRole }) {
   const [bioInput, setBioInput] = useState("");
   const [savingBio, setSavingBio] = useState(false);
   const [confirmDeleteUser, setConfirmDeleteUser] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   // Permission Checks
   const isOwner = parseInt(userId) === parseInt(currentUserId);
@@ -93,6 +94,8 @@ export function Profile({ userId, currentUserId, currentUserRole }) {
     formData.append("file", file);
 
     try {
+      setUploading(true);
+
       const res = await apiFetch("/users/profile-pic", {
         method: "POST",
         body: formData,
@@ -106,6 +109,8 @@ export function Profile({ userId, currentUserId, currentUserRole }) {
       toast("Profile photo updated");
     } catch (e) {
       toast(e.message);
+    } finally {
+      setUploading(false);
     }
   }
 
@@ -152,11 +157,18 @@ export function Profile({ userId, currentUserId, currentUserRole }) {
             <span>Add Photo</span>
           )}
 
+          {uploading && (
+            <div className="avatar-overlay">
+              <div className="spinner"></div>
+            </div>
+          )}
+
           {isOwner && (
             <input
               type="file"
               accept="image/*"
               onChange={handleProfilePicUpload}
+              disabled={uploading}
               className="profile-avatar-input"
             />
           )}

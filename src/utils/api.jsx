@@ -29,18 +29,47 @@ export async function apiFetch(path, opts = {}) {
     headers["Content-Type"] = "application/json";
   }
 
-  const res = await fetch(`${API}${path}`, {
-    ...restOpts,
-    body,
-    headers,
-  });
+  const url = `${API}${path}`;
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || "Request failed");
+  let attempts = 0;
+  const maxAttempts = 5;
+
+  while (attempts < maxAttempts) {
+    try {
+      const res = await fetch(url, {
+        ...restOpts,
+        body,
+        headers,
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Request failed");
+      }
+
+      if (res.status === 204) return null;
+      return await res.json();
+
+    } catch (err) {
+      attempts++;
+
+      // wait before retry (important for Render wake-up)
+      await new Promise(r => setTimeout(r, 2000));
+
+      if (attempts === maxAttempts) {
+        throw new Error("Backend not responding (possibly waking up)");
+      }
+    }
   }
-  if (res.status === 204) return null;
-  return res.json();
+}
+
+export async function isBackendAlive() {
+  try {
+    const res = await fetch(`${API}/health`);
+    return res.ok;
+  } catch {
+    return false;
+  }
 }
 
 const LIKED_KEY = "autocrat_liked";
